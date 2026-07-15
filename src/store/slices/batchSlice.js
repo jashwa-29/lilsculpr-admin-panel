@@ -1,12 +1,13 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { endpoints } from '../../api/endpoints';
+import api from '../../api/axios';
 
 export const fetchBatches = createAsyncThunk(
   'batches/fetchAll',
   async () => {
-    const response = await endpoints.batches.getAll();
-    if (response.success) {
-      return response.batches;
+    const response = await api.get('/batches');
+    const data = response.data;
+    if (data.success) {
+      return data.batches || data.data || [];
     }
     throw new Error('Failed to fetch batches');
   }
@@ -14,23 +15,61 @@ export const fetchBatches = createAsyncThunk(
 
 export const createBatch = createAsyncThunk(
   'batches/create',
-  async (batchData) => {
-    const response = await endpoints.batches.create(batchData);
-    if (response.success) {
-      return response.batch;
+  async (batchData, { rejectWithValue }) => {
+    try {
+      const response = await api.post('/batches', batchData);
+      if (response.data.success) {
+        return response.data.batch;
+      }
+      return rejectWithValue(response.data.error || 'Failed to create batch');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || error.message);
     }
-    throw new Error('Failed to create batch');
+  }
+);
+
+export const updateBatch = createAsyncThunk(
+  'batches/update',
+  async ({ id, data }, { rejectWithValue }) => {
+    try {
+      const response = await api.put(`/batches/${id}`, data);
+      if (response.data.success) {
+        return response.data.batch;
+      }
+      return rejectWithValue(response.data.error || 'Failed to update batch');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || error.message);
+    }
   }
 );
 
 export const completeBatch = createAsyncThunk(
   'batches/complete',
-  async (batchId) => {
-    const response = await endpoints.batches.complete(batchId);
-    if (response.success) {
-      return response.summary;
+  async (batchId, { rejectWithValue }) => {
+    try {
+      const response = await api.post(`/batches/${batchId}/complete`);
+      if (response.data.success) {
+        return { batchId, summary: response.data.summary };
+      }
+      return rejectWithValue(response.data.error || 'Failed to complete batch');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || error.message);
     }
-    throw new Error('Failed to complete batch');
+  }
+);
+
+export const deleteBatch = createAsyncThunk(
+  'batches/delete',
+  async (batchId, { rejectWithValue }) => {
+    try {
+      const response = await api.delete(`/batches/${batchId}`);
+      if (response.data.success) {
+        return batchId;
+      }
+      return rejectWithValue(response.data.error || 'Failed to delete batch');
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || error.message);
+    }
   }
 );
 
@@ -43,7 +82,11 @@ const initialState = {
 const batchSlice = createSlice({
   name: 'batches',
   initialState,
-  reducers: {},
+  reducers: {
+    clearBatchError: (state) => {
+      state.error = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchBatches.pending, (state) => {
@@ -60,8 +103,20 @@ const batchSlice = createSlice({
       })
       .addCase(createBatch.fulfilled, (state, action) => {
         state.batches.push(action.payload);
+      })
+      .addCase(updateBatch.fulfilled, (state, action) => {
+        const index = state.batches.findIndex(b => b._id === action.payload._id);
+        if (index !== -1) state.batches[index] = action.payload;
+      })
+      .addCase(deleteBatch.fulfilled, (state, action) => {
+        state.batches = state.batches.filter(b => b._id !== action.payload);
+      })
+      .addCase(completeBatch.fulfilled, (state, action) => {
+        const batch = state.batches.find(b => b._id === action.payload.batchId);
+        if (batch) batch.status = 'completed';
       });
   },
 });
 
+export const { clearBatchError } = batchSlice.actions;
 export default batchSlice.reducer;

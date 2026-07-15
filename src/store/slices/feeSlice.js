@@ -1,12 +1,12 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { endpoints } from '../../api/endpoints';
+import api from '../../api/axios';
 
 export const fetchFeesOverview = createAsyncThunk(
   'fees/fetchOverview',
   async () => {
-    const response = await endpoints.fees.getOverview();
-    if (response?.success) {
-      return response;
+    const response = await api.get('/enrollment/fees/overview');
+    if (response?.data?.success) {
+      return response.data;
     }
     throw new Error('Failed to fetch fees overview');
   }
@@ -15,9 +15,10 @@ export const fetchFeesOverview = createAsyncThunk(
 export const fetchFeesForMonth = createAsyncThunk(
   'fees/fetchForMonth',
   async ({ month, year }) => {
-    const response = await endpoints.fees.getByMonth(month, year);
-    if (response?.success) {
-      return response.fees;
+    const response = await api.get(`/enrollment/fees/month/${month}/${year}`);
+    if (response?.data?.success) {
+      // Backend returns { success: true, fees: [...] }
+      return response.data.fees || [];
     }
     throw new Error('Failed to fetch fees for the month');
   }

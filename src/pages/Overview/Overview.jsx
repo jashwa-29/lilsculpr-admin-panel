@@ -23,13 +23,27 @@ export const Overview = () => {
     dispatch(fetchFeesOverview());
   }, [dispatch]);
 
+  // ═══ FIX: Only show monthly fee collections (not admission fees) ═══
   useEffect(() => {
-    if (students.length > 0) {
-      const active = students.filter(s => s.status === 'active');
-      const rev = active.reduce((sum, s) => sum + (Number(s.amountPaid) || 0), 0);
-      setTotalRevenue(rev + (feesOverview?.paid?.total || 0));
+    if (feesOverview?.paid?.total) {
+      setTotalRevenue(feesOverview.paid.total);
+    } else {
+      setTotalRevenue(0);
     }
-  }, [students, feesOverview]);
+  }, [feesOverview]);
+
+  // Calculate current month's total expected fees
+  const getCurrentMonthExpected = () => {
+    const d = new Date();
+    const currentMonth = d.toLocaleString('en-IN', { month: 'long' });
+    const currentYear = d.getFullYear();
+    
+    const validStudents = students.filter(s => s.status === 'active' || s.status === 'paused');
+    return validStudents.reduce((sum, s) => {
+      const monthlyFee = FEES_MONTHLY[s.classType] || 2500;
+      return sum + monthlyFee;
+    }, 0);
+  };
 
   if (studentsLoading || batchesLoading || feesLoading) {
     return (
@@ -42,11 +56,18 @@ export const Overview = () => {
     );
   }
 
-  const activeStudents = students.filter(s => s.status === 'active');
-  const offline = activeStudents.filter(s => s.classType === 'offline');
-  const online = activeStudents.filter(s => s.classType === 'online');
+  // Only count active and paused students
+  const validStudents = students.filter(s => s.status === 'active' || s.status === 'paused');
+  const offline = validStudents.filter(s => s.classType === 'offline');
+  const online = validStudents.filter(s => s.classType === 'online');
+  
+  // Fee stats from the fees overview (monthly collections)
   const feesPaid = feesOverview?.paid?.count || 0;
   const feesPending = feesOverview?.pending?.count || 0;
+  const monthlyCollected = feesOverview?.paid?.total || 0;
+  
+  // Current month expected fees
+  const currentMonthExpected = getCurrentMonthExpected();
 
   return (
     <div>
@@ -54,8 +75,8 @@ export const Overview = () => {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <StatsCard 
           label="Total Students" 
-          value={activeStudents.length} 
-          subLabel="active" 
+          value={validStudents.length} 
+          subLabel="active + paused" 
           color="text-purple-600"
         />
         <StatsCard 
@@ -84,10 +105,32 @@ export const Overview = () => {
         />
         <StatsCard 
           label="Total Revenue" 
-          value={`₹${totalRevenue.toLocaleString('en-IN')}`} 
-          subLabel="admissions + monthly" 
+          value={`₹${monthlyCollected.toLocaleString('en-IN')}`} 
+          subLabel="monthly fees collected" 
           color="text-primary"
         />
+      </div>
+
+      {/* Quick stats for current month */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="card p-4 bg-blue-50 border-blue-200">
+          <div className="text-xs font-bold text-blue-700 uppercase tracking-wider">Current Month Expected</div>
+          <div className="font-nunito text-2xl font-black text-blue-700 mt-1">
+            ₹{currentMonthExpected.toLocaleString('en-IN')}
+          </div>
+          <div className="text-xs text-blue-600 mt-1">
+            {validStudents.length} active/paused students × monthly fee
+          </div>
+        </div>
+        <div className="card p-4 bg-green-50 border-green-200">
+          <div className="text-xs font-bold text-green-700 uppercase tracking-wider">Total Collected (All Months)</div>
+          <div className="font-nunito text-2xl font-black text-green-700 mt-1">
+            ₹{monthlyCollected.toLocaleString('en-IN')}
+          </div>
+          <div className="text-xs text-green-600 mt-1">
+            From {feesPaid} paid fee records
+          </div>
+        </div>
       </div>
 
       {/* Batch Summary */}

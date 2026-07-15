@@ -1,44 +1,44 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { endpoints } from '../../api/endpoints';
+import api from '../../api/axios';
 
+/**
+ * Fetch attendance records.
+ * params: { date (YYYY-MM-DD) } for daily view
+ *         { startDate, endDate } for monthly view  
+ *         { viewType: 'daily' | 'monthly' }
+ */
 export const fetchAttendance = createAsyncThunk(
   'attendance/fetch',
   async (params) => {
-    const response = await endpoints.attendance.get(params);
-    if (response?.success) {
-      // Return the records along with the viewType so the reducer knows where to store them
-      return { records: response.attendance, viewType: params.viewType || 'daily' };
+    const response = await api.get('/enrollment/attendance', { params: {
+      startDate: params.date || params.startDate,
+      endDate: params.endDate || params.date,
+      batchId: params.batchId,
+    }});
+    if (response?.data?.success) {
+      return {
+        records: response.data.attendance || response.data.records || [],
+        viewType: params.viewType || 'daily',
+      };
     }
     throw new Error('Failed to fetch attendance');
-  }
-);
-
-export const fetchCompensations = createAsyncThunk(
-  'attendance/fetchCompensations',
-  async (params) => {
-    const response = await endpoints.compensations.get(params);
-    if (response?.success) {
-      return response.compensations;
-    }
-    throw new Error('Failed to fetch compensations');
   }
 );
 
 export const saveAttendance = createAsyncThunk(
   'attendance/save',
   async (records) => {
-    const response = await endpoints.attendance.update({ records });
-    if (response?.success) {
-      return records; // Return the saved records so we can update state
+    const response = await api.post('/enrollment/attendance', { records });
+    if (response?.data?.success) {
+      return records;
     }
     throw new Error('Failed to save attendance');
   }
 );
 
 const initialState = {
-  dailyRecords: [], // For the daily view
-  monthlyRecords: [], // For the monthly view
-  compensations: [], // Array of compensation records
+  dailyRecords: [],
+  monthlyRecords: [],
   isLoading: false,
   error: null,
 };
@@ -76,44 +76,26 @@ const attendanceSlice = createSlice({
         state.isLoading = false;
         state.error = action.error?.message || 'Failed to fetch attendance';
       })
-      .addCase(fetchCompensations.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addCase(fetchCompensations.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.compensations = action.payload || [];
-      })
-      .addCase(fetchCompensations.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.error?.message || 'Failed to fetch compensations';
-      })
       .addCase(saveAttendance.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(saveAttendance.fulfilled, (state, action) => {
         state.isLoading = false;
-        // Update local records with saved ones
         const savedRecords = action.payload;
         savedRecords.forEach(saved => {
           if (saved.status === 'none') {
-            state.dailyRecords = state.dailyRecords.filter(r => !(r.studentId === saved.studentId && r.date === saved.date));
-            state.monthlyRecords = state.monthlyRecords.filter(r => !(r.studentId === saved.studentId && r.date === saved.date));
+            state.dailyRecords = state.dailyRecords.filter(
+              r => !(r.studentId === saved.studentId && r.date === saved.date)
+            );
           } else {
-            // Update daily records
-            const existingDaily = state.dailyRecords.find(r => r.studentId === saved.studentId && r.date === saved.date);
+            const existingDaily = state.dailyRecords.find(
+              r => r.studentId === saved.studentId && r.date === saved.date
+            );
             if (existingDaily) {
               existingDaily.status = saved.status;
             } else {
               state.dailyRecords.push(saved);
-            }
-            // Update monthly records
-            const existingMonthly = state.monthlyRecords.find(r => r.studentId === saved.studentId && r.date === saved.date);
-            if (existingMonthly) {
-              existingMonthly.status = saved.status;
-            } else {
-              state.monthlyRecords.push(saved);
             }
           }
         });
@@ -126,4 +108,4 @@ const attendanceSlice = createSlice({
 });
 
 export const { clearAttendanceError, clearMonthlyAttendance, clearDailyAttendance } = attendanceSlice.actions;
-export default attendanceSlice.reducer; 
+export default attendanceSlice.reducer;

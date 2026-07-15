@@ -15,14 +15,16 @@ import AttendanceTabs from './pages/Attendance/AttendanceTabs';
 import { Certificate } from './pages/Certificate/Certificate';
 import { Waitlist } from './pages/Waitlist/Waitlist';
 import { Compensations } from './pages/Compensations/Compensations';
+import { CompensationRequests } from './pages/CompensationRequests/CompensationRequests';
 import { Birthdays } from './pages/Birthdays/Birthdays';
+import { GalleryManagement } from './pages/Gallery/GalleryManagement';
 import Login from './pages/Login';
 
 function App() {
   return (
     <Provider store={store}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename="/admin">
           <Routes>
             <Route path="/login" element={<Login />} />
 
@@ -97,11 +99,31 @@ function App() {
               }
             />
             <Route
+              path="/compensation-requests"
+              element={
+                <ProtectedRoute>
+                  <Layout title="Compensation Requests">
+                    <CompensationRequests />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/birthdays"
               element={
                 <ProtectedRoute>
                   <Layout title="Birthdays">
                     <Birthdays />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/gallery"
+              element={
+                <ProtectedRoute>
+                  <Layout title="Manage Gallery">
+                    <GalleryManagement />
                   </Layout>
                 </ProtectedRoute>
               }

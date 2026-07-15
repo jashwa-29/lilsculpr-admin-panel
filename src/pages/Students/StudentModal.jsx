@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { Modal, StatusPill, Button } from '../../components/common';
-import { fetchStudentFees, updateStudentStatus, deleteStudent, markFeePaid, updateStudentPayment } from '../../store/slices/studentSlice';
-import { endpoints } from '../../api/endpoints';
+import { updateStudentStatus, deleteStudent } from '../../store/slices/studentSlice';
+import api from '../../api/axios';
 import { getBatchLabel, getPhotoUrl } from '../../utils/helpers';
 
 export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudentUpdated }) => {
@@ -103,8 +103,8 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
     setIsLoading(true);
     try {
       const backendId = student._id || student.id;
-      const result = await dispatch(fetchStudentFees(backendId)).unwrap();
-      setFees(result?.fees || result || []);
+      const response = await api.get(`/enrollment/students/${backendId}/fees`);
+      setFees(response.data?.fees || []);
     } catch (error) {
       console.error('Failed to load fees:', error);
     }
@@ -245,9 +245,9 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
         }
       }
 
-      const response = await endpoints.students.update(backendId, updateData);
-      
-      if (response.success) {
+      const response = await api.put(`/students/${backendId}`, updateData);
+
+      if (response.data?.success) {
         alert('✅ Student details updated successfully!');
         setIsEditing(false);
         if (onStudentUpdated) {
@@ -344,18 +344,29 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
 
     try {
       const backendId = student._id || student.id;
-      await dispatch(updateStudentPayment({
-        studentId: backendId,
-        paymentData: {
-          paymentStatus: 'Completed',
-          razorpayPaymentId: `MANUAL-${Date.now()}`,
-          amountPaid: amount,
-          paymentMethod: method,
-          feeCoverage: 'first_month'
-        }
-      })).unwrap();
       
-      alert('✅ First month fee marked as Paid!');
+      const now = new Date();
+      const month = now.toLocaleString('en-IN', { month: 'long' });
+      const year = now.getFullYear();
+
+      await api.post(`/enrollment/students/${backendId}/fees`, {
+        month,
+        year,
+        amount,
+        status: 'Paid',
+        paymentMethod: method,
+        notes: 'First month fee marked as Paid from admin'
+      });
+
+      await api.put(`/students/${backendId}`, {
+        paymentStatus: 'Completed',
+        razorpayPaymentId: `MANUAL-${Date.now()}`,
+        amountPaid: amount,
+        paymentMethod: method,
+        feeCoverage: 'first_month'
+      });
+      
+      alert('✅ First month fee marked as Paid successfully.');
       window.location.reload(); 
     } catch (error) {
       console.error('Failed to update payment status:', error);
@@ -375,15 +386,13 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
 
     try {
       const backendId = student._id || student.id;
-      await dispatch(markFeePaid({ studentId: backendId, data: { month, year, amount, status: 'Paid', paymentMethod: method } })).unwrap();
-      
-      if (month === new Date().toLocaleString('en-IN', { month: 'long' }) && year === new Date().getFullYear() && feeCoverage === 'pending_first_month') {
-        await dispatch(updateStudentPayment({
-          studentId: backendId,
-          paymentData: { feeCoverage: 'first_month' }
-        })).unwrap();
-      }
-      
+      await api.post(`/enrollment/students/${backendId}/fees`, {
+        month,
+        year,
+        amount,
+        status: 'Paid',
+        paymentMethod: method
+      });
       await loadFees();
       alert('✅ Fee marked as Paid!');
     } catch (error) {
@@ -422,13 +431,13 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
     }
 
     try {
-      const data = await endpoints.students.updateLevel(student._id || student.id, newLevel);
-      if (data.success) {
+      const response = await api.put(`/students/${student._id || student.id}`, { currentLevel: newLevel });
+      if (response.data?.success) {
         alert(`Level updated to ${newLevel} for ${student.childName}!`);
         if (onStudentUpdated) onStudentUpdated();
-        window.location.reload(); 
+        window.location.reload();
       } else {
-        alert('Failed to update level: ' + data.error);
+        alert('Failed to update level: ' + (response.data?.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Failed to update level:', error);

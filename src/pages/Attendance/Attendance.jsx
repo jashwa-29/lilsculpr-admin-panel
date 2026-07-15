@@ -109,21 +109,33 @@ export const Attendance = () => {
     };
     
     const validDays = dayMap[batch.dayId] || [];
-    return validDays.includes(dayOfWeek);
+    
+    if (validDays.length > 0) {
+      return validDays.includes(dayOfWeek);
+    }
+    
+    // Fallback for batches without a valid dayId mapping
+    return true;
   };
 
   const groupedStudents = useMemo(() => {
-    const activeStudents = students.filter(s => s.status === 'active');
+    // Include both active and paused students (matches Monthly Attendance behavior)
+    const activeStudents = students.filter(s => s.status === 'active' || s.status === 'paused');
     const grouped = {};
 
     activeStudents.forEach(student => {
-      const batchId = student.batchId || 'unassigned';
-      const batch = batches.find(b => b._id === batchId);
+      // Handle both populated batchId objects and plain ObjectId strings
+      const rawBatchId = student.batchId?._id || student.batchId;
+      const batchId = rawBatchId || 'unassigned';
       
-      // ═══ FILTER: Only include if batch has classes on selected date ═══
-      if (batch && !isBatchActiveOnDate(batch, selectedDate)) {
-        return;
+      // Only filter by date for students with a recognized batch
+      if (batchId !== 'unassigned') {
+        const batch = batches.find(b => String(b._id) === String(batchId));
+        if (batch && !isBatchActiveOnDate(batch, selectedDate)) {
+          return; // Skip students whose batch doesn't run on the selected date
+        }
       }
+      // Unassigned students are always shown
       
       if (!grouped[batchId]) {
         grouped[batchId] = [];

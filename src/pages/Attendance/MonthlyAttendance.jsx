@@ -5,7 +5,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { fetchStudents } from '../../store/slices/studentSlice';
 import { fetchBatches } from '../../store/slices/batchSlice';
-import { fetchAttendance, fetchCompensations, saveAttendance } from '../../store/slices/attendanceSlice';
+import { fetchAttendance, saveAttendance } from '../../store/slices/attendanceSlice';
+import { fetchCompensationsAdmin } from '../../store/slices/compensationSlice';
 import { Button, StatusPill } from '../../components/common';
 
 // Helper: Get the day of week for a given date
@@ -20,7 +21,8 @@ const isDayOfWeek = (dateStr, dayId) => {
   if (dayId === 'monfri') return day === 1 || day === 5;
   if (dayId === 'tuethu') return day === 2 || day === 4;
   if (dayId === 'satsu') return day === 6 || day === 0;
-  return false;
+  // Fallback for batches without a recognized dayId mapping
+  return true;
 };
 
 export const MonthlyAttendance = () => {
@@ -29,7 +31,8 @@ export const MonthlyAttendance = () => {
 
   const { list: students, isLoading: studentsLoading } = useSelector((state) => state.students);
   const { batches, isLoading: batchesLoading } = useSelector((state) => state.batches);
-  const { monthlyRecords: records, compensations, isLoading: attendanceLoading } = useSelector((state) => state.attendance);
+  const { monthlyRecords: records, isLoading: attendanceLoading } = useSelector((state) => state.attendance);
+  const { records: compensations } = useSelector((state) => state.compensations);
 
   // State
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -53,11 +56,17 @@ export const MonthlyAttendance = () => {
       const startDate = `${year}-${month}-01`;
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-      dispatch(fetchAttendance({ startDate, endDate, viewType: 'monthly' }));
-      dispatch(fetchCompensations({ startDate, endDate }));
+      
+      const params = { startDate, endDate, viewType: 'monthly' };
+      if (selectedBatch !== 'all') {
+        params.batchId = selectedBatch;
+      }
+      
+      dispatch(fetchAttendance(params));
+      dispatch(fetchCompensationsAdmin({ startDate, endDate }));
       setPendingChanges({});
     }
-  }, [selectedMonth, dispatch]);
+  }, [selectedMonth, selectedBatch, dispatch]);
 
   // ─── UNSAVED CHANGES WARNING ────────────────────────────────────────
   const hasUnsavedChanges = Object.keys(pendingChanges).length > 0;
@@ -129,7 +138,7 @@ export const MonthlyAttendance = () => {
       const lastDay = new Date(year, month, 0).getDate();
       const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
       dispatch(fetchAttendance({ startDate, endDate, viewType: 'monthly' }));
-      dispatch(fetchCompensations({ startDate, endDate }));
+      dispatch(fetchCompensationsAdmin({ startDate, endDate }));
       alert('✅ Attendance saved successfully!');
     } catch (err) {
       console.error('Failed to save attendance:', err);
@@ -151,14 +160,19 @@ export const MonthlyAttendance = () => {
   const filteredStudents = useMemo(() => {
     let result = students.filter(s => s.status === 'active' || s.status === 'paused');
     
-    // 🔥 NEW: Filter by selected batch
+    // Handle both populated batchId objects and plain ObjectId strings
     if (selectedBatch !== 'all') {
-      result = result.filter(s => s.batchId === selectedBatch);
+      result = result.filter(s => {
+        const studentBatchId = s.batchId?._id || s.batchId;
+        return String(studentBatchId) === String(selectedBatch);
+      });
     }
     
     result.sort((a, b) => {
-      if (a.batchId !== b.batchId) {
-        return (a.batchId || '').localeCompare(b.batchId || '');
+      const aBatch = String(a.batchId?._id || a.batchId || '');
+      const bBatch = String(b.batchId?._id || b.batchId || '');
+      if (aBatch !== bBatch) {
+        return aBatch.localeCompare(bBatch);
       }
       return (a.childName || '').localeCompare(b.childName || '');
     });
@@ -168,9 +182,18 @@ export const MonthlyAttendance = () => {
 
   // ─── HELPER FUNCTIONS ──────────────────────────────────────────────
   const getStudentBatch = (studentId) => {
-    const student = students.find(s => s._id === studentId || s.id === studentId);
-    if (!student || !student.batchId) return null;
-    return batches.find(b => b._id === student.batchId);
+    const student = students.find(s => {
+      const sid = s._id || s.id;
+      return String(sid) === String(studentId);
+    });
+    if (!student) return null;
+
+    // If batchId is already a populated object, return it directly
+    if (student.batchId && typeof student.batchId === 'object' && student.batchId._id) {
+      return student.batchId;
+    }
+    // Otherwise look it up in the batches list
+    return batches.find(b => String(b._id) === String(student.batchId));
   };
 
   const getStudentDayId = (studentId) => {
@@ -185,7 +208,28 @@ export const MonthlyAttendance = () => {
     const lastDay = new Date(year, month, 0).getDate();
     const regularDayId = getStudentDayId(studentId);
 
-    // 1. Add regular batch days
+    // If a specific batch is selected, only show days for that batch
+    if (selectedBatch !== 'all') {
+      const studentBatch = getStudentBatch(studentId);
+      if (studentBatch && String(studentBatch._id) === String(selectedBatch)) {
+        if (regularDayId) {
+          for (let i = 1; i <= lastDay; i++) {
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+            if (isDayOfWeek(dateStr, regularDayId)) {
+              days.push({
+                day: i,
+                date: dateStr,
+                dayOfWeek: getDayOfWeek(dateStr),
+                isCompensation: false,
+              });
+            }
+          }
+        }
+      }
+      return days;
+    }
+
+    // 1. Add regular batch days (for all batches)
     if (regularDayId) {
       for (let i = 1; i <= lastDay; i++) {
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(i).padStart(2, '0')}`;

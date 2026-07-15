@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { SearchBar, Button, Modal } from '../../components/common';
 import { StudentCard } from './StudentCard';
 import { StudentModal } from './StudentModal';
-import { fetchStudents, createStudent, clearError, startLevelJourney, advanceLevel } from '../../store/slices/studentSlice';
+import { fetchStudents, fetchStudentsByBatch, createStudent, clearError, startLevelJourney, advanceLevel } from '../../store/slices/studentSlice';
 import { fetchBatches } from '../../store/slices/batchSlice';
 import { FEES_MONTHLY, KIT_FEE } from '../../utils/constants';
 import { getSlotKey, generateId, getBatchShortName, getBatchDisplayName } from '../../utils/helpers';
@@ -76,9 +76,15 @@ export const Students = () => {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
-    dispatch(fetchStudents());
+    const effectiveBatchId = batchIdFilter || (filter !== 'all' ? filter : null);
+    // Use the batch-specific endpoint when a batch is selected for accurate server-side filtering
+    if (effectiveBatchId) {
+      dispatch(fetchStudentsByBatch(effectiveBatchId));
+    } else {
+      dispatch(fetchStudents());
+    }
     dispatch(fetchBatches());
-  }, [dispatch, refreshTrigger]);
+  }, [dispatch, refreshTrigger, batchIdFilter, filter]);
 
   useEffect(() => {
     if (error) {
@@ -156,31 +162,36 @@ export const Students = () => {
     return options;
   };
 
-  const filterStudents = () => {
+  const filteredStudents = useMemo(() => {
     let filtered = students;
-    
+
+    // Handle both populated batchId objects and plain string IDs
     if (batchIdFilter) {
-      filtered = filtered.filter(s => s.batchId === batchIdFilter);
+      filtered = filtered.filter(s => {
+        const sid = s.batchId?._id || s.batchId;
+        return String(sid) === String(batchIdFilter);
+      });
+    } else if (filter !== 'all') {
+      filtered = filtered.filter(s => {
+        const sid = s.batchId?._id || s.batchId;
+        return String(sid) === String(filter);
+      });
     }
-    
-    if (filter !== 'all') {
-      filtered = filtered.filter(s => s.batchId === filter);
-    }
-    
+
     filtered = filtered.filter(s => s.status !== 'cancelled');
-    
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(s => 
+      filtered = filtered.filter(s =>
         s.childName?.toLowerCase().includes(q) ||
         s.parentName?.toLowerCase().includes(q) ||
         s.contact1?.includes(q) ||
         s.schoolName?.toLowerCase().includes(q)
       );
     }
-    
+
     return filtered;
-  };
+  }, [students, filter, batchIdFilter, searchQuery]);
 
   const handleViewStudent = (studentId) => {
     const student = students.find(s => s.id === studentId);
@@ -420,7 +431,7 @@ export const Students = () => {
     );
   }
 
-  const filteredStudents = filterStudents();
+
   const amount = calculateAmount();
 
   return (

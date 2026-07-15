@@ -22,6 +22,13 @@ const apiClient = {
     const response = await api.put(endpoint, data);
     return response.data;
   },
+
+  putFormData: async (endpoint, formData) => {
+    const response = await api.put(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
   
   delete: async (endpoint) => {
     const response = await api.delete(endpoint);
