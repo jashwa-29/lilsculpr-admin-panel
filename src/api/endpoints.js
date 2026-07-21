@@ -65,5 +65,11 @@ export const endpoints = {
       return apiClient.delete(`/gallery/admin/${id}`);
     },
     reorder: (items) => apiClient.post('/gallery/admin/reorder', { items }),
+  },
+  workshops: {
+    getAll: (params) => apiClient.get('/special-course/admin/registrations', { params }),
+    getById: (id) => apiClient.get(`/special-course/admin/registrations/${id}`),
+    getStats: () => apiClient.get('/special-course/admin/statistics'),
+    expire: (data) => apiClient.post('/special-course/admin/expire-registration', data),
   }
 };

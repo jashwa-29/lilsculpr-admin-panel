@@ -16,6 +16,7 @@ export const Sidebar = () => {
     { name: 'Compensation Requests', path: '/compensation-requests', icon: '📝' },
     { name: 'Birthdays', path: '/birthdays', icon: '🎂' },
     { name: 'Manage Gallery', path: '/gallery', icon: '🖼️' },
+    { name: 'Workshops', path: '/workshops', icon: '🎪' },
   ];
 
   return (

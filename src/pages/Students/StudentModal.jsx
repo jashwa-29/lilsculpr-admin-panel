@@ -1,3 +1,5 @@
+// lilsculpr-admin/src/pages/Students/StudentModal.jsx
+
 import React, { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
 import { Modal, StatusPill, Button } from '../../components/common';
@@ -15,6 +17,12 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
   const [editForm, setEditForm] = useState({});
   const [editErrors, setEditErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+
+  // ─── LOAD AVAILABLE BATCHES ────────────────────────────────────────
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
 
   // ─── LOAD FEES ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -48,57 +56,44 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
         classType: student.classType || 'offline',
         dayId: student.dayId || 'monfri',
         time: student.time || '',
+        batchId: student.batchId?._id || student.batchId || '',
         kitOptIn: student.kitOptIn || false,
         paymentStatus: student.paymentStatus || 'Completed',
         paymentMethod: student.paymentMethod || 'Razorpay',
         amountPaid: student.amountPaid || 0,
-        currentLevel: student.currentLevel || 0,
+        currentLevel: student.currentLevel !== undefined ? student.currentLevel : 0,
         enrollmentStatus: student.enrollmentStatus || 'active',
         status: student.status || 'active',
       });
       setEditErrors({});
       setIsEditing(false);
+      setPhotoFile(null);
+      setPhotoPreview(null);
     }
   }, [isOpen, student]);
 
-  const initializeEditForm = () => {
-    if (!student) return;
-    let parsedDate = '';
-    if (student.dateOfBirth) {
-      try {
-        const d = new Date(student.dateOfBirth);
-        if (!isNaN(d.getTime())) {
-          parsedDate = d.toISOString().split('T')[0];
-        }
-      } catch (e) {
-        console.error('Invalid dateOfBirth:', student.dateOfBirth);
-      }
+  // ─── LOAD AVAILABLE BATCHES WHEN EDITING ──────────────────────────
+  useEffect(() => {
+    if (isEditing) {
+      fetchAvailableBatches();
     }
+  }, [isEditing]);
 
-    setEditForm({
-      childName: student.childName || '',
-      childAge: student.childAge || '',
-      dateOfBirth: parsedDate,
-      childClass: student.childClass || '',
-      schoolName: student.schoolName || '',
-      parentName: student.parentName || '',
-      email: student.email || '',
-      contact1: student.contact1 || '',
-      contact2: student.contact2 || '',
-      classType: student.classType || 'offline',
-      dayId: student.dayId || 'monfri',
-      time: student.time || '',
-      kitOptIn: student.kitOptIn || false,
-      paymentStatus: student.paymentStatus || 'Completed',
-      paymentMethod: student.paymentMethod || 'Razorpay',
-      amountPaid: student.amountPaid || 0,
-      currentLevel: student.currentLevel || 0,
-      enrollmentStatus: student.enrollmentStatus || 'active',
-      status: student.status || 'active',
-    });
-    setEditErrors({});
+  const fetchAvailableBatches = async () => {
+    setBatchesLoading(true);
+    try {
+      const response = await api.get('/batches');
+      if (response.data.success) {
+        setAvailableBatches(response.data.batches || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch batches:', error);
+    } finally {
+      setBatchesLoading(false);
+    }
   };
 
+  // ─── LOAD FEES ──────────────────────────────────────────────────────
   const loadFees = async () => {
     setIsLoading(true);
     try {
@@ -115,15 +110,18 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
 
   const photoUrl = getPhotoUrl(student);
   
-  const getBatchDisplayName = () => {
-    if (!student.batchId) return 'Unassigned';
-    const dayLabel = student.dayId === 'monfri' ? 'Mon/Fri'
-      : student.dayId === 'tuethu' ? 'Tue/Thu'
-      : 'Sat/Sun';
-    return `${dayLabel} · ${student.time}`;
+  // ─── GET BATCH DISPLAY NAME ──────────────────────────────────────
+  const getBatchDisplayName = (batch) => {
+    if (!batch) return 'Unassigned';
+    const dayLabel = batch.dayId === 'monfri' ? 'Mon & Fri'
+      : batch.dayId === 'tuethu' ? 'Tue & Thu'
+      : batch.dayId === 'satsu' ? 'Sat & Sun'
+      : batch.dayId;
+    const typeLabel = batch.type === 'offline' ? '🏫 Offline' : '💻 Online';
+    return `${typeLabel} · ${dayLabel} · ${batch.time}`;
   };
   
-  const batchLabel = getBatchDisplayName();
+  const batchLabel = getBatchDisplayName(student.batchId);
   
   const isPaymentCompleted = student.paymentStatus === 'Completed' || student.razorpayPaymentId;
   const isPaymentPending = student.paymentStatus === 'Pending' || 
@@ -146,7 +144,6 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
     setEditForm(prev => {
       const updatedForm = { ...prev, [name]: newValue };
       
-      // Auto-calculate age from DOB
       if (name === 'dateOfBirth' && newValue) {
         const dob = new Date(newValue);
         if (!isNaN(dob.getTime())) {
@@ -169,6 +166,21 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
     }
   };
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPhotoFile(null);
+      setPhotoPreview(null);
+    }
+  };
+
   const validateEditForm = () => {
     const errors = {};
     const required = ['childName', 'parentName', 'contact1', 'childAge'];
@@ -179,19 +191,24 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
       }
     });
 
-    if (editForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
+    if (editForm.email && editForm.email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
       errors.email = 'Please enter a valid email address';
     }
 
     if (editForm.contact1 && !/^\d{10}$/.test(editForm.contact1.replace(/\D/g, ''))) {
       errors.contact1 = 'Please enter a valid 10-digit phone number';
     }
-    if (editForm.contact2 && !/^\d{10}$/.test(editForm.contact2.replace(/\D/g, ''))) {
+    
+    const contact2Value = editForm.contact2 || '';
+    if (contact2Value.trim() !== '' && contact2Value.trim() !== '—' && !/^\d{10}$/.test(contact2Value.replace(/\D/g, ''))) {
       errors.contact2 = 'Please enter a valid 10-digit phone number';
     }
 
-    if (editForm.childAge && (isNaN(editForm.childAge) || editForm.childAge < 3 || editForm.childAge > 16)) {
-      errors.childAge = 'Age must be between 3 and 16';
+    if (editForm.childAge && editForm.childAge !== '') {
+      const age = Number(editForm.childAge);
+      if (isNaN(age) || age < 3 || age > 16) {
+        errors.childAge = 'Age must be between 3 and 16';
+      }
     }
 
     setEditErrors(errors);
@@ -214,28 +231,37 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
     }
 
     setIsSaving(true);
+    setEditErrors({});
 
     try {
       const backendId = student._id || student.id;
+      
+      let currentLevelValue = Number(editForm.currentLevel);
+      
+      if (currentLevelValue === 0 && student.currentLevel > 0) {
+        currentLevelValue = student.currentLevel;
+      }
+      
       const updateData = {
-        childName: editForm.childName,
-        childAge: editForm.childAge,
-        childClass: editForm.childClass,
-        schoolName: editForm.schoolName,
-        parentName: editForm.parentName,
-        email: editForm.email,
-        contact1: editForm.contact1,
-        contact2: editForm.contact2 || '',
-        classType: editForm.classType,
-        dayId: editForm.dayId,
-        time: editForm.time,
-        kitOptIn: editForm.kitOptIn,
-        paymentStatus: editForm.paymentStatus,
-        paymentMethod: editForm.paymentMethod,
-        amountPaid: editForm.amountPaid,
-        currentLevel: editForm.currentLevel,
-        enrollmentStatus: editForm.enrollmentStatus,
-        status: editForm.status,
+        childName: editForm.childName?.trim() || '',
+        childAge: editForm.childAge || '',
+        childClass: editForm.childClass?.trim() || '',
+        schoolName: editForm.schoolName?.trim() || '',
+        parentName: editForm.parentName?.trim() || '',
+        email: editForm.email?.trim() || '',
+        contact1: editForm.contact1?.trim() || '',
+        contact2: editForm.contact2?.trim() || '',
+        classType: editForm.classType || 'offline',
+        dayId: editForm.dayId || 'monfri',
+        time: editForm.time || '',
+        batchId: editForm.batchId || student.batchId?._id || '',
+        kitOptIn: editForm.kitOptIn || false,
+        paymentStatus: editForm.paymentStatus || 'Completed',
+        paymentMethod: editForm.paymentMethod || 'Razorpay',
+        amountPaid: Number(editForm.amountPaid) || 0,
+        currentLevel: currentLevelValue > 0 ? currentLevelValue : undefined,
+        enrollmentStatus: editForm.enrollmentStatus || 'active',
+        status: editForm.status || 'active',
       };
 
       if (editForm.dateOfBirth) {
@@ -245,7 +271,20 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
         }
       }
 
-      const response = await api.put(`/students/${backendId}`, updateData);
+      let response;
+      if (photoFile) {
+        const formData = new FormData();
+        formData.append('photo', photoFile);
+        formData.append('data', JSON.stringify(updateData));
+        
+        console.log('📤 Sending FormData with photo...');
+        response = await api.put(`/students/${backendId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        console.log('📤 Sending JSON update...', updateData);
+        response = await api.put(`/students/${backendId}`, updateData);
+      }
 
       if (response.data?.success) {
         alert('✅ Student details updated successfully!');
@@ -256,13 +295,23 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
         onClose();
         setTimeout(() => {
           window.location.reload();
-        }, 300);
+        }, 500);
       } else {
-        throw new Error(response.error || 'Update failed');
+        throw new Error(response.data?.error || 'Update failed');
       }
     } catch (error) {
       console.error('Failed to update student:', error);
-      alert('❌ Failed to update student: ' + (error.message || 'Unknown error'));
+      
+      let errorMessage = 'Failed to update student. ';
+      if (error.response?.data?.error) {
+        errorMessage += error.response.data.error;
+      } else if (error.message) {
+        errorMessage += error.message;
+      } else {
+        errorMessage += 'Please try again.';
+      }
+      
+      alert('❌ ' + errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -274,6 +323,8 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
       setIsEditing(false);
       initializeEditForm();
       setEditErrors({});
+      setPhotoFile(null);
+      setPhotoPreview(null);
     }
   };
 
@@ -285,51 +336,56 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
     }
     
     if (isEditing) {
-      // Cancel mode: reset and close edit
       setEditErrors({});
       setIsEditing(false);
       initializeEditForm();
     } else {
-      // Enter edit mode: initialize form with current data
-      let parsedDate = '';
-      if (student.dateOfBirth) {
-        try {
-          const d = new Date(student.dateOfBirth);
-          if (!isNaN(d.getTime())) {
-            parsedDate = d.toISOString().split('T')[0];
-          }
-        } catch (err) {
-          console.error('Invalid dateOfBirth:', student.dateOfBirth);
-        }
-      }
-      
-      const rawAge = student.childAge ? student.childAge.toString().replace(/\D/g, '') : '';
-      
-      const freshForm = {
-        childName: student.childName || '',
-        childAge: rawAge,
-        dateOfBirth: parsedDate,
-        childClass: student.childClass || '',
-        schoolName: student.schoolName || '',
-        parentName: student.parentName || '',
-        email: student.email || '',
-        contact1: student.contact1 || '',
-        contact2: student.contact2 || '',
-        classType: student.classType || 'offline',
-        dayId: student.dayId || 'monfri',
-        time: student.time || '',
-        kitOptIn: student.kitOptIn || false,
-        paymentStatus: student.paymentStatus || 'Completed',
-        paymentMethod: student.paymentMethod || 'Razorpay',
-        amountPaid: student.amountPaid || 0,
-        currentLevel: student.currentLevel || 0,
-        enrollmentStatus: student.enrollmentStatus || 'active',
-        status: student.status || 'active',
-      };
-      setEditForm(freshForm);
-      setEditErrors({});
+      initializeEditForm();
       setIsEditing(true);
     }
+  };
+
+  const initializeEditForm = () => {
+    if (!student) return;
+    let parsedDate = '';
+    if (student.dateOfBirth) {
+      try {
+        const d = new Date(student.dateOfBirth);
+        if (!isNaN(d.getTime())) {
+          parsedDate = d.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.error('Invalid dateOfBirth:', student.dateOfBirth);
+      }
+    }
+
+    const rawAge = student.childAge ? student.childAge.toString().replace(/\D/g, '') : '';
+
+    setEditForm({
+      childName: student.childName || '',
+      childAge: rawAge,
+      dateOfBirth: parsedDate,
+      childClass: student.childClass || '',
+      schoolName: student.schoolName || '',
+      parentName: student.parentName || '',
+      email: student.email || '',
+      contact1: student.contact1 || '',
+      contact2: student.contact2 || '',
+      classType: student.classType || 'offline',
+      dayId: student.dayId || 'monfri',
+      time: student.time || '',
+      batchId: student.batchId?._id || student.batchId || '',
+      kitOptIn: student.kitOptIn || false,
+      paymentStatus: student.paymentStatus || 'Completed',
+      paymentMethod: student.paymentMethod || 'Razorpay',
+      amountPaid: student.amountPaid || 0,
+      currentLevel: student.currentLevel !== undefined ? student.currentLevel : 0,
+      enrollmentStatus: student.enrollmentStatus || 'active',
+      status: student.status || 'active',
+    });
+    setEditErrors({});
+    setPhotoFile(null);
+    setPhotoPreview(null);
   };
 
   // ═══ Handle marking admission fee as paid ═══
@@ -546,11 +602,48 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Child Details */}
+        {/* ─── Child Details ────────────────────────────────────────── */}
         <div className="md:col-span-2">
           <h4 className="text-secondary text-sm font-bold uppercase tracking-wider border-b-2 border-dashed border-[#e8e4f0] pb-2 mb-3">
             👦 Child Details
           </h4>
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-semibold mb-1">Child Photograph</label>
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#e8e4f0] flex-shrink-0 bg-gray-100">
+              {photoPreview || photoUrl ? (
+                <img 
+                  src={photoPreview || photoUrl} 
+                  alt={editForm.childName || 'Student'} 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 text-2xl">
+                  {editForm.childName?.[0] || '?'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark"
+              />
+              <p className="text-xs text-muted mt-1">Upload a new photo (JPG, PNG, max 2MB)</p>
+            </div>
+            {photoFile && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { setPhotoFile(null); setPhotoPreview(null); }}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
         </div>
 
         <div>
@@ -616,7 +709,7 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
           />
         </div>
 
-        {/* Parent Details */}
+        {/* ─── Parent Details ────────────────────────────────────────── */}
         <div className="md:col-span-2 mt-2">
           <h4 className="text-secondary text-sm font-bold uppercase tracking-wider border-b-2 border-dashed border-[#e8e4f0] pb-2 mb-3">
             👤 Parent Details
@@ -640,7 +733,7 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-1">Email</label>
+          <label className="block text-sm font-semibold mb-1">Email <span className="text-xs text-muted font-normal">(optional)</span></label>
           <input
             type="email"
             name="email"
@@ -670,7 +763,7 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
         </div>
 
         <div>
-          <label className="block text-sm font-semibold mb-1">Contact 2</label>
+          <label className="block text-sm font-semibold mb-1">Contact 2 <span className="text-xs text-muted font-normal">(optional)</span></label>
           <input
             type="tel"
             name="contact2"
@@ -683,66 +776,86 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
           {editErrors.contact2 && <p className="text-xs text-red-500 mt-1">{editErrors.contact2}</p>}
         </div>
 
-        {/* Enrollment Details */}
+        {/* ─── Batch Transfer ────────────────────────────────────────── */}
         <div className="md:col-span-2 mt-2">
           <h4 className="text-secondary text-sm font-bold uppercase tracking-wider border-b-2 border-dashed border-[#e8e4f0] pb-2 mb-3">
-            📋 Enrollment Details
+            📋 Batch & Enrollment
           </h4>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold mb-1">Class Type</label>
-          <select
-            name="classType"
-            value={editForm.classType || 'offline'}
-            onChange={handleEditChange}
-            className="w-full px-3 py-2 border border-[#e8e4f0] rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary bg-white"
-          >
-            <option value="offline">🏫 Offline</option>
-            <option value="online">💻 Online</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold mb-1">Day</label>
-          <select
-            name="dayId"
-            value={editForm.dayId || 'monfri'}
-            onChange={handleEditChange}
-            className="w-full px-3 py-2 border border-[#e8e4f0] rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary bg-white"
-          >
-            <option value="monfri">Monday & Friday</option>
-            <option value="tuethu">Tuesday & Thursday</option>
-            <option value="satsu">Saturday & Sunday</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold mb-1">Time</label>
-          <input
-            type="text"
-            name="time"
-            value={editForm.time || ''}
-            onChange={handleEditChange}
-            placeholder="e.g. 4:00–5:00 PM"
-            className="w-full px-3 py-2 border border-[#e8e4f0] rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary"
-          />
-        </div>
-
-        <div className="flex items-center gap-3 pt-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              name="kitOptIn"
-              checked={!!editForm.kitOptIn}
-              onChange={handleEditChange}
-              className="w-4 h-4 accent-primary"
-            />
-            <span className="text-sm font-semibold">Enrollment Kit Included</span>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-semibold mb-1">
+            Assign to Batch <span className="text-red-500">*</span>
           </label>
+          <select
+            name="batchId"
+            value={editForm.batchId || ''}
+            onChange={handleEditChange}
+            className="w-full px-3 py-2 border border-[#e8e4f0] rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary bg-white"
+            required
+          >
+            <option value="">Select a batch...</option>
+            
+            {availableBatches.filter(b => 
+              b.status !== 'archived' && b.type === 'offline'
+            ).length > 0 && (
+              <optgroup label="🏫 Offline Batches">
+                {availableBatches.filter(b => 
+                  b.status !== 'archived' && b.type === 'offline'
+                ).map((b) => {
+                  const isFull = b.enrolledStudents?.length >= b.capacity;
+                  const isCurrent = String(b._id) === String(editForm.batchId);
+                  return (
+                    <option 
+                      key={b._id} 
+                      value={b._id}
+                      disabled={isFull && !isCurrent}
+                    >
+                      {getBatchDisplayName(b)} 
+                      ({b.enrolledStudents?.length || 0}/{b.capacity})
+                      {isFull && !isCurrent ? ' 🔴 FULL' : ''}
+                      {isCurrent ? ' ✅ Current' : ''}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            )}
+            
+            {availableBatches.filter(b => 
+              b.status !== 'archived' && b.type === 'online'
+            ).length > 0 && (
+              <optgroup label="💻 Online Batches">
+                {availableBatches.filter(b => 
+                  b.status !== 'archived' && b.type === 'online'
+                ).map((b) => {
+                  const isFull = b.enrolledStudents?.length >= b.capacity;
+                  const isCurrent = String(b._id) === String(editForm.batchId);
+                  return (
+                    <option 
+                      key={b._id} 
+                      value={b._id}
+                      disabled={isFull && !isCurrent}
+                    >
+                      {getBatchDisplayName(b)} 
+                      ({b.enrolledStudents?.length || 0}/{b.capacity})
+                      {isFull && !isCurrent ? ' 🔴 FULL' : ''}
+                      {isCurrent ? ' ✅ Current' : ''}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            )}
+          </select>
+          <p className="text-xs text-muted mt-1">
+            {editForm.batchId ? (
+              <span className="text-green-600">✅ Student will be transferred to the selected batch.</span>
+            ) : (
+              <span>Select a batch to transfer the student.</span>
+            )}
+          </p>
         </div>
 
-        {/* Status */}
+        {/* ─── Status & Level ────────────────────────────────────────── */}
         <div className="md:col-span-2 mt-2">
           <h4 className="text-secondary text-sm font-bold uppercase tracking-wider border-b-2 border-dashed border-[#e8e4f0] pb-2 mb-3">
             📊 Status & Level
@@ -797,7 +910,7 @@ export const StudentModal = ({ isOpen, onClose, student, onStartLevel, onStudent
           </select>
         </div>
 
-        {/* Payment Details */}
+        {/* ─── Payment Details ───────────────────────────────────────── */}
         <div className="md:col-span-2 mt-2">
           <h4 className="text-secondary text-sm font-bold uppercase tracking-wider border-b-2 border-dashed border-[#e8e4f0] pb-2 mb-3">
             💳 Payment Details

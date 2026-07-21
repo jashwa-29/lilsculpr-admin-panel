@@ -10,7 +10,8 @@ export const fetchStudents = createAsyncThunk(
     if (data.success) {
       return (data.students || data.data || []).map(s => ({
         ...s,
-        id: s.enrollmentId || s._id,
+        id: s._id,
+        enrollmentId: s.enrollmentId || '',
         photo: s.photoUrl || '',
       }));
     }
@@ -27,7 +28,8 @@ export const fetchStudentsByBatch = createAsyncThunk(
     if (data.success) {
       return (data.students || []).map(s => ({
         ...s,
-        id: s.enrollmentId || s._id,
+        id: s._id,
+        enrollmentId: s.enrollmentId || '',
         photo: s.photoUrl || '',
       }));
     }

@@ -36,7 +36,7 @@ export const StudentCard = ({ student, onClick, onStartLevel }) => {
         )}
         <div className="flex-1 min-w-0">
           <div className="font-bold text-sm">{student.childName}</div>
-          <div className="text-xs text-muted font-mono">{student.id}</div>
+          <div className="text-xs text-muted font-mono">{student.enrollmentId}</div>
           <div className="text-xs text-muted">👤 {student.parentName}</div>
         </div>
         <div className="flex flex-col items-end gap-1">

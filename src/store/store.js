@@ -8,6 +8,7 @@ import feeReducer from './slices/feeSlice';
 import galleryReducer from './slices/gallerySlice';
 import studentReducer from './slices/studentSlice';
 import waitlistReducer from './slices/waitlistSlice';
+import workshopReducer from './slices/workshopSlice';
 
 export const store = configureStore({
   reducer: {
@@ -20,5 +21,6 @@ export const store = configureStore({
     gallery: galleryReducer,
     students: studentReducer,
     waitlist: waitlistReducer,
+    workshops: workshopReducer,
   },
 });

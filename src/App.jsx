@@ -18,6 +18,7 @@ import { Compensations } from './pages/Compensations/Compensations';
 import { CompensationRequests } from './pages/CompensationRequests/CompensationRequests';
 import { Birthdays } from './pages/Birthdays/Birthdays';
 import { GalleryManagement } from './pages/Gallery/GalleryManagement';
+import { Workshops } from './pages/Workshops/Workshops';
 import Login from './pages/Login';
 
 function App() {
@@ -124,6 +125,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout title="Manage Gallery">
                     <GalleryManagement />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workshops"
+              element={
+                <ProtectedRoute>
+                  <Layout title="Workshop Registrations">
+                    <Workshops />
                   </Layout>
                 </ProtectedRoute>
               }
