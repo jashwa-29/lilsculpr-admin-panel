@@ -83,7 +83,7 @@ export const Workshops = () => {
     loadData();
   };
 
-  const carnivals = [...new Set(registrations.map(r => r.carnivalName).filter(Boolean))];
+  const carnivals = (stats.carnivalStatistics || []).map(c => c._id).filter(Boolean);
 
   const columns = [
     { key: 'id', title: 'Reg ID' },
@@ -181,7 +181,7 @@ export const Workshops = () => {
           <option value="failed">Failed</option>
           <option value="refunded">Refunded</option>
         </select>
-        {carnivals.length > 1 && (
+        {carnivals.length >= 1 && (
           <select
             value={filterCarnival}
             onChange={(e) => { setFilterCarnival(e.target.value); setCurrentPage(1); }}
